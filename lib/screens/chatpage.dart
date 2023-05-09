@@ -1,7 +1,7 @@
 import 'package:chatapplication/firebase/auth_helper.dart';
 import 'package:chatapplication/firebase/chat_helper.dart';
 import 'package:chatapplication/screens/chatroom.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:chatapplication/utils/searchuser.dart';
 import 'package:flutter/material.dart';
 
 class ChatListScreen extends StatefulWidget {
@@ -17,25 +17,42 @@ class _ChatListScreenState extends State<ChatListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Chats'),
+        actions: [
+          IconButton(
+              onPressed: () {
+                FirebaseHelper.signOutUser();
+                Navigator.of(context).pop();
+              },
+              icon: const Icon(Icons.logout))
+        ],
       ),
-      body: StreamBuilder<List<QueryDocumentSnapshot>>(
-        stream: FireStoreHelper.streamChats('sgc2hts1sCU9bIrWQ2133KIuosi1'),
+      body: StreamBuilder<List<ChatRoomModel>>(
+        stream: FireStoreHelper.streamChats(FirebaseHelper.currentUserUid),
         builder: (context, snapshot) {
           if (snapshot.hasData) {
-            List<QueryDocumentSnapshot> chats = snapshot.data!;
+            List<ChatRoomModel> chats = snapshot.data!;
             return ListView.builder(
               itemCount: chats.length,
               itemBuilder: (context, index) {
-                String chatName = chats[index].id;
-                return ListTile(
-                  title: Text(chatName),
-                  onTap: () {
-                    Navigator.of(context).push(MaterialPageRoute(
-                      builder: (context) => ChatRoom(
-                        chatRoomId: chats[index].id,
-                      ),
-                    ));
-                    // Navigate to the chat room
+                return FutureBuilder(
+                  future: FireStoreHelper.getReciepientId(FirebaseHelper.currentUserUid, chats[index].chatRoomId),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const LinearProgressIndicator();
+                    }
+                    return ListTile(
+                      leading: Icon(Icons.person),
+                      title: Text(snapshot.data ?? 'No Data'),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => ChatRoom(
+                              chatRoomId: chats[index].chatRoomId,
+                            ),
+                          ),
+                        );
+                      },
+                    );
                   },
                 );
               },
@@ -47,34 +64,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
           }
         },
       ),
-      floatingActionButton: FloatingActionButton(onPressed: () {
-        showModalBottomSheet(
-          context: context,
-          builder: (context) {
-            return FutureBuilder(
-              future: FirebaseHelper.getUsers(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const CircularProgressIndicator();
-                }
-                if (snapshot.data == null) {
-                  return const Text('No registered Users found');
-                } else {
-                  return ListView(
-                    children: [
-                      for (Users i in snapshot.data!)
-                        ListTile(
-                          title: Text(i.displayName),
-                          subtitle: Text(i.email),
-                        )
-                    ],
-                  );
-                }
-              },
-            );
-          },
-        );
-      }),
+      floatingActionButton: FloatingActionButton(
+          child: const Icon(Icons.add),
+          onPressed: () {
+            showSearch(context: context, delegate: UsersSearch());
+          }),
     );
   }
 }
